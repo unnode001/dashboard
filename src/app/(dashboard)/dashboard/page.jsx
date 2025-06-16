@@ -3,11 +3,12 @@
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { API_BASE_URL } from '@/lib/config';
 import axios from 'axios';
 import { Settings } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ConfigModal from './components/config-modal';
-import DashboardSkeleton from './components/dashboard-skeleton'; // 引入骨架屏
+import DashboardSkeleton from './components/dashboard-skeleton';
 import RecentActivity from './components/recent-activity';
 import StatsCards from './components/stats-cards';
 import UsageChart from './components/usage-chart';
@@ -55,11 +56,13 @@ export default function DashboardPage() {
     }
     setError(null);
     try {
-      // 附加时间范围参数
-      const response = await axios.get(`/api/dashboard?range=${timeRange}`);
+      // ✨ 2. 将URL修改为指向Express后端
+      const response = await axios.get(`${API_BASE_URL}/api/dashboard`, {
+        params: { range: timeRange }
+      });
       setData(response.data);
     } catch (err) {
-      setError('无法加载仪表盘数据，请稍后重试。');
+      setError('无法加载仪表盘数据，请确保后端服务正在运行。');
       console.error(err);
     } finally {
       setLoading(false);
@@ -80,7 +83,6 @@ export default function DashboardPage() {
 
     if (config.refreshInterval > 0) {
       intervalRef.current = setInterval(() => {
-        console.log('Auto refreshing data...');
         fetchData();
       }, config.refreshInterval);
     }
@@ -98,7 +100,7 @@ export default function DashboardPage() {
       return <DashboardSkeleton />;
     }
     if (error) {
-      return <div className="text-red-500">{error}</div>;
+      return <div className="text-red-500 p-4 border border-destructive rounded-md">{error}</div>; // ✨ 错误提示样式优化
     }
     if (data) {
       return (

@@ -2,9 +2,10 @@
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { API_BASE_URL } from '@/lib/config'; // ✨ 1. 引入后端API地址
 import { Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid'; // 请确保已安装: npm install uuid
+import { v4 as uuidv4 } from 'uuid';
 import ChatMessages from './components/chat-messages';
 import SessionSidebar from './components/session-sidebar';
 
@@ -27,6 +28,7 @@ export default function ConsolePage() {
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -80,6 +82,103 @@ export default function ConsolePage() {
 
   // --- 事件处理器 ---
 
+  const handleSendMessage = async (prompt, contextMessages) => {
+    setIsLoading(true);
+    setError(null);
+    const assistantMessageId = uuidv4();
+
+    updateActiveSession(s => ({
+      ...s,
+      messages: [...contextMessages, { id: assistantMessageId, role: 'assistant', content: '' }]
+    }));
+
+    try {
+      // ✨ 2. 将URL和请求体修改为指向Express后端
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          ...activeSession.settings, // 包含 model, temperature, maxTokens, systemPrompt
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      if (!response.body) {
+        throw new Error("响应体为空");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const METADATA_PREFIX = "METADATA::";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        let chunk = decoder.decode(value, { stream: true });
+
+        if (chunk.includes(METADATA_PREFIX)) {
+          const parts = chunk.split(METADATA_PREFIX);
+          const textPart = parts[0];
+          const metadataJson = parts[1];
+
+          if (textPart) {
+            updateActiveSession(s => ({
+              ...s,
+              messages: s.messages.map(msg =>
+                msg.id === assistantMessageId ? { ...msg, content: msg.content + textPart } : msg
+              )
+            }));
+          }
+
+          if (metadataJson) {
+            const metadata = JSON.parse(metadataJson);
+            updateActiveSession(s => ({
+              ...s,
+              messages: s.messages.map(msg =>
+                msg.id === assistantMessageId ? { ...msg, ...metadata } : msg
+              )
+            }));
+          }
+
+        } else {
+          updateActiveSession(s => ({
+            ...s,
+            messages: s.messages.map(msg =>
+              msg.id === assistantMessageId ? { ...msg, content: msg.content + chunk } : msg
+            )
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Chat API error:', error);
+      setError('与聊天服务通信失败，请确保后端服务正在运行。');
+      updateActiveSession(s => ({
+        ...s,
+        messages: s.messages.map(msg =>
+          msg.id === assistantMessageId ? { ...msg, content: `错误: ${error.message}` } : msg
+        )
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading || !activeSession) return;
+    const userMessage = { id: uuidv4(), role: 'user', content: input };
+    const newMessages = [...activeSession.messages, userMessage];
+    updateActiveSession(s => ({ ...s, messages: newMessages, name: input.substring(0, 20) }));
+    setInput('');
+    handleSendMessage(input, newMessages);
+  };
+
   const handleNewSession = () => {
     if (isLoading) return;
     const newSession = createNewSession();
@@ -108,68 +207,6 @@ export default function ConsolePage() {
         setActiveSessionId(newSession.id);
       }
     }
-  };
-
-  const handleSendMessage = async (prompt, contextMessages) => {
-    setIsLoading(true);
-    const assistantMessageId = uuidv4();
-
-    updateActiveSession(s => ({
-      ...s,
-      messages: [...contextMessages, { id: assistantMessageId, role: 'assistant', content: '' }]
-    }));
-
-    try {
-      const response = await fetch('/api/chat', { /* ... */ });
-      if (!response.body) throw new Error("响应体为空");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      const METADATA_PREFIX = "METADATA::";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        let chunk = decoder.decode(value, { stream: true });
-
-        // --- 新增：解析元数据 ---
-        if (chunk.startsWith(METADATA_PREFIX)) {
-          const metadataJson = chunk.substring(METADATA_PREFIX.length);
-          const metadata = JSON.parse(metadataJson);
-
-          // 将用量数据附加到对应的AI消息上
-          updateActiveSession(s => ({
-            ...s,
-            messages: s.messages.map(msg =>
-              msg.id === assistantMessageId ? { ...msg, ...metadata } : msg
-            )
-          }));
-        } else {
-          // --- 正常处理文本块 ---
-          updateActiveSession(s => ({
-            ...s,
-            messages: s.messages.map(msg =>
-              msg.id === assistantMessageId ? { ...msg, content: msg.content + chunk } : msg
-            )
-          }));
-        }
-      }
-    } catch (error) {
-      // ... (错误处理逻辑保持不变)
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading || !activeSession) return;
-    const userMessage = { id: uuidv4(), role: 'user', content: input };
-    const newMessages = [...activeSession.messages, userMessage];
-    updateActiveSession(s => ({ ...s, messages: newMessages }));
-    setInput('');
-    handleSendMessage(input, newMessages);
   };
 
   const handleRegenerate = (assistantMessageId) => {
@@ -204,13 +241,19 @@ export default function ConsolePage() {
 
   // 初始加载状态
   if (!activeSession) {
-    return <div className="flex justify-center items-center h-full">正在加载会话...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center">
+        <p className="text-lg text-muted-foreground">没有活动的会话</p>
+        <Button onClick={handleNewSession} className="mt-4">开始新对话</Button>
+      </div>
+    );
   }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background">
       <div className="flex-1 flex flex-col">
         <div className="flex-1 overflow-y-auto p-4">
+          {error && <div className="text-red-500 p-4 border border-destructive rounded-md mb-4">{error}</div>}
           <ChatMessages
             messages={activeSession.messages}
             onRegenerate={handleRegenerate}

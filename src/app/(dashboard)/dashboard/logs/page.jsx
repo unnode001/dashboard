@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { API_BASE_URL } from '@/lib/config'; // ✨ 1. 引入后端API地址
 import { useDebounce } from '@/lib/hooks/use-debounce';
 import { columns } from './components/columns';
 import { DataTable } from './components/data-table';
@@ -24,6 +25,7 @@ export default function LogsPage() {
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [error, setError] = useState(null);
 
   // 筛选状态
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,30 +41,31 @@ export default function LogsPage() {
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
+    setError(null); // 清除之前的错误信息
     try {
-      const params = new URLSearchParams({
+      const params = {
         page: pagination.page,
         limit: pagination.limit,
         query: debouncedSearchQuery,
         sortBy: sorting.id,
         sortOrder: sorting.desc ? 'desc' : 'asc',
-      });
+      };
 
       if (statusFilter !== 'all') {
-        params.append('status', statusFilter);
+        params.status = statusFilter;
       }
       if (dateRange?.from) {
-        params.append('startDate', dateRange.from.toISOString());
-        // 如果没有结束日期，则默认结束日期为开始日期
-        params.append('endDate', (dateRange.to || dateRange.from).toISOString());
+        params.startDate = dateRange.from.toISOString();
+        params.endDate = (dateRange.to || dateRange.from).toISOString();
       }
 
-      const response = await axios.get(`/api/logs?${params.toString()}`);
+      // ✨ 2. 将URL修改为指向Express后端
+      const response = await axios.get(`${API_BASE_URL}/api/logs`, { params });
       setLogs(response.data.data);
       setPagination(response.data.pagination);
     } catch (error) {
-      console.error('Failed to fetch logs:', error);
-      // 可以在这里设置一个错误状态以在UI中显示
+      console.error('获取日志失败:', error);
+      setError('无法加载日志数据，请确保后端服务正在运行。');
     } finally {
       setLoading(false);
     }
@@ -91,19 +94,20 @@ export default function LogsPage() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const params = new URLSearchParams({
+      const params = {
         query: debouncedSearchQuery,
         sortBy: sorting.id,
         sortOrder: sorting.desc ? 'desc' : 'asc',
         export: 'true',
-      });
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      };
+      if (statusFilter !== 'all') params.status = statusFilter;
       if (dateRange?.from) {
-        params.append('startDate', dateRange.from.toISOString());
-        params.append('endDate', (dateRange.to || dateRange.from).toISOString());
+        params.startDate = dateRange.from.toISOString();
+        params.endDate = (dateRange.to || dateRange.from).toISOString();
       }
 
-      const response = await axios.get(`/api/logs?${params.toString()}`);
+      // ✨ 3. 将URL修改为指向Express后端
+      const response = await axios.get(`${API_BASE_URL}/api/logs`, { params });
       const allData = response.data.data;
 
       // 扁平化数据以便导出
@@ -138,7 +142,7 @@ export default function LogsPage() {
       document.body.removeChild(link);
 
     } catch (error) {
-      console.error("Failed to export data:", error);
+      console.error("导出数据失败:", error);
       alert("导出失败，请检查控制台日志。");
     } finally {
       setIsExporting(false);
@@ -176,6 +180,8 @@ export default function LogsPage() {
           </Button>
         </div>
       </div>
+
+      {error && <div className="text-red-500 p-4 border border-destructive rounded-md mb-4">{error}</div>}
 
       <DataTable
         columns={columns(handleRowClick)}
