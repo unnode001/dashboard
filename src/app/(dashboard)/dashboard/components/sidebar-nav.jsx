@@ -2,14 +2,16 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Cpu, FileText, LayoutDashboard, Terminal } from 'lucide-react';
+import { Cpu, FileText, LayoutDashboard, Settings, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+
 
 const navLinks = [
     { href: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
     { href: '/dashboard/console', label: '控制台', icon: Terminal },
-    { href: '/dashboard/logs', label: '日志', icon: FileText }
+    { href: '/dashboard/logs', label: '日志', icon: FileText },
+    { href: '/dashboard/settings', label: '设置', icon: Settings },
 ];
 
 export default function SidebarNav() {
