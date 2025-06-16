@@ -4,7 +4,7 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState('system');
   const [promptLibrary, setPromptLibrary] = useState([]);
   const [editingPrompt, setEditingPrompt] = useState(null); // null: 不在编辑, 'new': 新建, object: 编辑现有
+  const [isPromptFormOpen, setIsPromptFormOpen] = useState(false);
   const importFileRef = useRef(null); // 用于触发文件选择
 
   // --- 数据加载与持久化 ---
@@ -163,12 +164,25 @@ export default function SettingsPage() {
     event.target.value = '';
   };
 
+  // 优化：打开新建提示词表单
+  const handleAddNewPrompt = () => {
+    setEditingPrompt('new');
+    setIsPromptFormOpen(true);
+  };
+
+  // 优化：打开编辑提示词表单
+  const handleEditPrompt = (prompt) => {
+    setEditingPrompt(prompt);
+    setIsPromptFormOpen(true);
+  };
+
   const handleSavePrompt = ({ title, content }) => {
     if (editingPrompt === 'new') {
       setPromptLibrary(prev => [...prev, { id: uuidv4(), title, content }]);
     } else {
       setPromptLibrary(prev => prev.map(p => p.id === editingPrompt.id ? { ...p, title, content } : p));
     }
+    setIsPromptFormOpen(false);
     setEditingPrompt(null);
   };
 
@@ -326,18 +340,9 @@ export default function SettingsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>管理您的系统提示词</CardTitle>
-              <Button onClick={() => setEditingPrompt('new')}><Plus className="mr-2 h-4 w-4" />添加新提示</Button>
+              <Button onClick={handleAddNewPrompt}><Plus className="mr-2 h-4 w-4" />添加新提示</Button>
             </CardHeader>
             <CardContent>
-              {editingPrompt && (
-                <div className="mb-6">
-                  <PromptLibraryForm
-                    prompt={editingPrompt === 'new' ? null : editingPrompt}
-                    onSave={handleSavePrompt}
-                    onCancel={() => setEditingPrompt(null)}
-                  />
-                </div>
-              )}
               <div className="space-y-4">
                 {promptLibrary.map(prompt => (
                   <div key={prompt.id} className="p-4 border rounded-lg flex justify-between items-start">
@@ -346,12 +351,12 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{prompt.content}</p>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => setEditingPrompt(prompt)}><Edit className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleEditPrompt(prompt)}><Edit className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeletePrompt(prompt.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
                   </div>
                 ))}
-                {promptLibrary.length === 0 && !editingPrompt && (
+                {promptLibrary.length === 0 && (
                   <p className="text-center text-muted-foreground py-8">您的提示词库是空的。请添加一个新提示！</p>
                 )}
               </div>
@@ -359,6 +364,18 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* 优化：将表单移动到 Dialog 组件中 */}
+      <Dialog open={isPromptFormOpen} onOpenChange={setIsPromptFormOpen}>
+        <DialogContent>
+          <DialogTitle>{editingPrompt === 'new' ? '新建提示词' : '编辑提示词'}</DialogTitle>
+          <PromptLibraryForm
+            prompt={editingPrompt === 'new' ? null : editingPrompt}
+            onSave={handleSavePrompt}
+            onCancel={() => { setIsPromptFormOpen(false); setEditingPrompt(null); }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
