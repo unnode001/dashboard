@@ -3,12 +3,15 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+
+// 动态导入我们新的Markdown编辑器
+const MarkdownEditor = dynamic(() => import('./markdown-editor'), { ssr: false });
 
 export default function PromptLibraryForm({ prompt, onSave, onCancel }) {
     const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
+    const [content, setContent] = useState(''); // content 现在将存储Markdown字符串
 
     useEffect(() => {
         if (prompt) {
@@ -41,16 +44,10 @@ export default function PromptLibraryForm({ prompt, onSave, onCancel }) {
                 />
             </div>
             <div>
-                <Label htmlFor="prompt-content">内容</Label>
-                <Textarea
-                    id="prompt-content"
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="你是一位资深的Python开发专家..."
-                    className="h-32"
-                />
+                <Label>内容 (支持Markdown)</Label>
+                <MarkdownEditor value={content} onChange={setContent} />
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 mt-6">
                 <Button type="button" variant="ghost" onClick={onCancel}>
                     取消
                 </Button>

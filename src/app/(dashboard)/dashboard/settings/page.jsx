@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Download, Edit, Plus, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid'; // 安装: npm install uuid
 import ApiKeyForm from './components/api-key-form';
 import PromptLibraryForm from './components/prompt-library-form';
@@ -348,7 +350,13 @@ export default function SettingsPage() {
                   <div key={prompt.id} className="p-4 border rounded-lg flex justify-between items-start">
                     <div>
                       <h4 className="font-semibold">{prompt.title}</h4>
-                      <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{prompt.content}</p>
+                      {/* --- 核心改动在这里 --- */}
+                      {/* 使用 ReactMarkdown 组件来渲染内容 */}
+                      <div className="text-sm text-muted-foreground mt-2 prose dark:prose-invert max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {prompt.content}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleEditPrompt(prompt)}><Edit className="h-4 w-4" /></Button>
@@ -367,13 +375,15 @@ export default function SettingsPage() {
 
       {/* 优化：将表单移动到 Dialog 组件中 */}
       <Dialog open={isPromptFormOpen} onOpenChange={setIsPromptFormOpen}>
-        <DialogContent>
-          <DialogTitle>{editingPrompt === 'new' ? '新建提示词' : '编辑提示词'}</DialogTitle>
-          <PromptLibraryForm
-            prompt={editingPrompt === 'new' ? null : editingPrompt}
-            onSave={handleSavePrompt}
-            onCancel={() => { setIsPromptFormOpen(false); setEditingPrompt(null); }}
-          />
+        <DialogContent className="w-screen h-screen max-w-none max-h-none rounded-none p-0 flex flex-col sm:p-8">
+          <DialogTitle className="px-4 pt-4 sm:px-8 sm:pt-8 text-2xl">{editingPrompt === 'new' ? '新建提示词' : '编辑提示词'}</DialogTitle>
+          <div className="flex-1 flex flex-col overflow-auto px-4 pb-4 sm:px-8 sm:pb-8">
+            <PromptLibraryForm
+              prompt={editingPrompt === 'new' ? null : editingPrompt}
+              onSave={handleSavePrompt}
+              onCancel={() => { setIsPromptFormOpen(false); setEditingPrompt(null); }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>
